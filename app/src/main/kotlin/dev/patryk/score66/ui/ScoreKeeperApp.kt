@@ -4,6 +4,8 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -23,7 +25,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -31,8 +32,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
@@ -47,6 +46,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,8 +63,8 @@ import dev.patryk.score66.data.PendingRound
 import dev.patryk.score66.data.Player
 import dev.patryk.score66.data.Round
 import dev.patryk.score66.data.dataStore
+import dev.patryk.score66.ui.theme.Exo2
 import dev.patryk.score66.ui.theme.Gray
-import dev.patryk.score66.ui.theme.Red
 import dev.patryk.score66.ui.theme.Score66Theme
 
 // ── Entry point ──────────────────────────────────────────────────────────────
@@ -101,7 +101,6 @@ fun ScoreKeeperApp() {
 
 // ── Screen ───────────────────────────────────────────────────────────────────
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ScoreKeeperScreen(
     state: AppState,
@@ -124,27 +123,26 @@ fun ScoreKeeperScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row {
+                    TextButton(onClick = onUndo) { Text(strings.undo, color = Gray) }
+                    TextButton(onClick = { showNewGameDialog = true }) { Text(strings.newGame, color = Gray) }
+                }
+                TextButton(onClick = onToggleLanguage) {
                     Text(
-                        text = strings.appTitle,
-                        style = MaterialTheme.typography.titleMedium,
-                        color = Color.White
+                        text = if (state.language == Language.EN) "PL" else "EN",
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
                     )
-                },
-                actions = {
-                    TextButton(onClick = onToggleLanguage) {
-                        Text(
-                            text = if (state.language == Language.EN) "PL" else "EN",
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background
-                )
-            )
+                }
+            }
         },
         containerColor = MaterialTheme.colorScheme.background
     ) { paddingValues ->
@@ -166,25 +164,22 @@ fun ScoreKeeperScreen(
                     onSelect = onSelectDeclarer,
                     onEditName = { id, _ -> editingPlayerId = id }
                 )
-                MultiplierRow(
+                MultiplierWonLostRow(
                     activeMultiplier = multiplier,
-                    onSelect = onSetMultiplier
-                )
-                WonLostRow(
                     declarerWon = state.pending?.declarerWon,
-                    enabled = hasDeclarerSelected,
-                    onSelect = onSetDeclarerWon
+                    wonLostEnabled = hasDeclarerSelected,
+                    onSelectMultiplier = onSetMultiplier,
+                    onSelectWonLost = onSetDeclarerWon
                 )
                 OutcomeRow(
                     multiplier = multiplier,
                     enabled = hasWonLost,
                     onFinalize = onFinalizeHand
                 )
-                UtilityRow(onUndo = onUndo, onNewGame = { showNewGameDialog = true })
                 Spacer(Modifier.height(4.dp))
             }
 
-            HorizontalDivider(color = Gray.copy(alpha = 0.25f))
+            HorizontalDivider(color = MaterialTheme.colorScheme.background)
 
             // Zone B — scrollable history
             Column(
@@ -290,8 +285,9 @@ fun PlayerSelectorCard(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = name,
+                text = name.uppercase(),
                 color = Color.White,
+                fontFamily = Exo2,
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
@@ -308,7 +304,13 @@ fun PlayerSelectorCard(
 }
 
 @Composable
-fun MultiplierRow(activeMultiplier: Multiplier, onSelect: (Multiplier) -> Unit = {}) {
+fun MultiplierWonLostRow(
+    activeMultiplier: Multiplier,
+    declarerWon: Boolean?,
+    wonLostEnabled: Boolean,
+    onSelectMultiplier: (Multiplier) -> Unit = {},
+    onSelectWonLost: (Boolean) -> Unit = {}
+) {
     val strings = LocalStrings.current
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -318,41 +320,26 @@ fun MultiplierRow(activeMultiplier: Multiplier, onSelect: (Multiplier) -> Unit =
             label = strings.double,
             active = activeMultiplier == Multiplier.DOUBLE,
             modifier = Modifier.weight(1f),
-            onClick = { onSelect(Multiplier.DOUBLE) }
+            onClick = { onSelectMultiplier(Multiplier.DOUBLE) }
         )
         GameToggleButton(
             label = strings.redouble,
             active = activeMultiplier == Multiplier.REDOUBLE,
-            modifier = Modifier.weight(1f),
-            onClick = { onSelect(Multiplier.REDOUBLE) }
+            onClick = { onSelectMultiplier(Multiplier.REDOUBLE) }
         )
-    }
-}
-
-@Composable
-fun WonLostRow(
-    declarerWon: Boolean?,
-    enabled: Boolean,
-    onSelect: (Boolean) -> Unit = {}
-) {
-    val strings = LocalStrings.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
         GameToggleButton(
             label = strings.won,
             active = declarerWon == true,
-            enabled = enabled,
+            enabled = wonLostEnabled,
             modifier = Modifier.weight(1f),
-            onClick = { onSelect(true) }
+            onClick = { onSelectWonLost(true) }
         )
         GameToggleButton(
             label = strings.lost,
             active = declarerWon == false,
-            enabled = enabled,
+            enabled = wonLostEnabled,
             modifier = Modifier.weight(1f),
-            onClick = { onSelect(false) }
+            onClick = { onSelectWonLost(false) }
         )
     }
 }
@@ -369,35 +356,23 @@ fun OutcomeRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutcomeButton(
-            label = "${strings.noTrick}\n(${3 * multiplier.factor})",
+            label = "${strings.noTrick} • ${3 * multiplier.factor}",
             enabled = enabled,
             modifier = Modifier.weight(1f),
             onClick = { onFinalize(3) }
         )
         OutcomeButton(
-            label = "${strings.withTrick}\n(${2 * multiplier.factor})",
+            label = "${strings.withTrick} • ${2 * multiplier.factor}",
             enabled = enabled,
             modifier = Modifier.weight(1f),
             onClick = { onFinalize(2) }
         )
         OutcomeButton(
-            label = "${strings.withHalf}\n(${1 * multiplier.factor})",
+            label = "${strings.withHalf} • ${1 * multiplier.factor}",
             enabled = enabled,
             modifier = Modifier.weight(1f),
             onClick = { onFinalize(1) }
         )
-    }
-}
-
-@Composable
-fun UtilityRow(onUndo: () -> Unit = {}, onNewGame: () -> Unit = {}) {
-    val strings = LocalStrings.current
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        TextButton(onClick = onUndo) { Text(strings.undo, color = Gray) }
-        TextButton(onClick = onNewGame) { Text(strings.newGame, color = Gray) }
     }
 }
 
@@ -415,6 +390,7 @@ fun GameToggleButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = if (active) MaterialTheme.colorScheme.primary else Color.Transparent,
             contentColor = Color.White,
@@ -445,6 +421,7 @@ fun OutcomeButton(
         onClick = onClick,
         modifier = modifier,
         enabled = enabled,
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
         colors = ButtonDefaults.outlinedButtonColors(
             containerColor = Color.Transparent,
             contentColor = Color.White,
@@ -467,30 +444,26 @@ fun PlayerHistoryBlock(player: Player, state: AppState) {
 
     Column {
         Text(
-            text = player.name,
-            color = Gray,
-            fontSize = 12.sp,
+            text = player.name.uppercase(),
+            color = Color.White,
+            fontFamily = Exo2,
+            fontSize = 24.sp,
             modifier = Modifier.padding(bottom = 4.dp)
         )
         FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             scoredRounds.forEach { round ->
                 key(round.number) {
                     val declarerName = state.players
                         .firstOrNull { it.id == round.declarerId }?.name.orEmpty()
-                    val tag = when (round.multiplier) {
-                        Multiplier.DOUBLE -> strings.doubleTag
-                        Multiplier.REDOUBLE -> strings.redoubleTag
-                        Multiplier.NORMAL -> ""
-                    }
                     ScorePill(
                         roundNumber = round.number,
                         declarerInitial = declarerName.firstOrNull()
                             ?.uppercaseChar()?.toString().orEmpty(),
                         score = round.awarded,
-                        tag = tag
+                        multiplier = round.multiplier
                     )
                 }
             }
@@ -499,46 +472,39 @@ fun PlayerHistoryBlock(player: Player, state: AppState) {
 }
 
 @Composable
-fun ScorePill(roundNumber: Int, declarerInitial: String, score: Int, tag: String) {
+fun ScorePill(roundNumber: Int, declarerInitial: String, score: Int, multiplier: Multiplier = Multiplier.NORMAL) {
+    val containerColor = when (multiplier) {
+        Multiplier.DOUBLE -> Color(0xFF2A1818)
+        Multiplier.REDOUBLE -> Color(0xFF351010)
+        Multiplier.NORMAL -> MaterialTheme.colorScheme.surface
+    }
     Card(
         shape = RoundedCornerShape(6.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+        colors = CardDefaults.cardColors(containerColor = containerColor)
     ) {
         Row(
             modifier = Modifier
-                .width(64.dp)
-                .height(52.dp)
-                .padding(horizontal = 6.dp, vertical = 4.dp)
+                .width(54.dp)
+                .padding(start = 3.dp, end = 3.dp, top = 5.dp, bottom = 1.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Left: round number (top) + declarer initial (bottom)
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight(),
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(roundNumber.toString(), color = Gray, fontSize = 10.sp, lineHeight = 12.sp)
-                Text(declarerInitial, color = Gray, fontSize = 10.sp, lineHeight = 12.sp)
+            // Left: round number (top) + declarer initial (bottom).
+            // Expose the column's LAST baseline (the initial) so the score can
+            // rest its baseline on it — see alignBy below.
+            Column(modifier = Modifier.alignBy(LastBaseline)) {
+                Text(roundNumber.toString(), color = Gray, fontSize = 12.sp, lineHeight = 13.sp)
+                Text(declarerInitial, color = Gray, fontSize = 12.sp, lineHeight = 13.sp)
             }
-            // Right: score (top) + multiplier tag (bottom)
-            Column(
-                modifier = Modifier.fillMaxHeight(),
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    text = score.toString(),
-                    color = Color.White,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 22.sp,
-                    lineHeight = 24.sp
-                )
-                Box(modifier = Modifier.height(12.dp), contentAlignment = Alignment.BottomEnd) {
-                    if (tag.isNotEmpty()) {
-                        Text(tag, color = Red, fontSize = 10.sp, lineHeight = 12.sp)
-                    }
-                }
-            }
+            // Right: score. Baseline-aligned to the initial's baseline so the
+            // glyph bottoms (no descenders on digits/initials) line up exactly.
+            Text(
+                modifier = Modifier.alignBy(LastBaseline),
+                text = score.toString(),
+                color = Color.White,
+                fontWeight = FontWeight.Bold,
+                fontSize = 23.sp,
+                lineHeight = 25.sp
+            )
         }
     }
 }

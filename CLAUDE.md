@@ -2,7 +2,7 @@
 
 A minimal, battery-light Android app for tracking game-point scores in the card game **66 (Sechsundsechzig)** for 3 players. Built native in Kotlin + Jetpack Compose. No server, no network, no analytics, no background work.
 
-Build it in the phases below, in order. Each phase has an acceptance check — do not move on until it passes. Keep everything as simple as the spec allows; do not add features beyond this document.
+The App is now fully built and functional. All future changes may deviate from the details listed below.
 
 ---
 
@@ -248,46 +248,3 @@ This app is inherently low-power; do not over-engineer. Just avoid the few real 
 - Do **not** keep the screen on (no `FLAG_KEEP_SCREEN_ON`).
 - Keep Compose recompositions scoped: hoist state, use stable/immutable data classes, avoid recomposing the whole tree on each tap. Use `key`s in the round list.
 - Always-dark theme reduces OLED draw.
-
----
-
-## 11. Build phases & acceptance checks
-
-**Phase 0 — Project setup.** New Compose project, Material 3, kotlinx.serialization + DataStore deps, portrait lock, always-dark theme.
-*Check:* app launches to a black screen with the title bar.
-
-**Phase 1 — State & scoring logic.** Implement full data model (`Player`, `Multiplier`, `Round`, `PendingRound`, `AppState`), ViewModel mutations (select declarer, set multiplier, set won/lost, finalize hand, undo, new game), and derived totals. Unit-test all scoring paths:
-- Declarer wins: only declarerId gains `basePoints × factor`; others gain 0.
-- Declarer loses: both opponents each gain `basePoints × factor`; declarer gains 0.
-- All three basePoints (3/2/1) × all three multipliers (1/2/4) = 9 combinations, for both win and loss paths (18 cases total).
-
-*Check:* all 18 unit-test cases pass; running totals compute correctly from a seeded round list.
-
-**Phase 2 — Core layout (static).** Zone A skeleton (declarer selector row, multiplier row, Won/Lost row, outcome row, utility row) and Zone B (three stacked player blocks with wrapping score chips), both bound to state, no input yet.
-*Check:* manually seeding rounds — including declarer-loses rounds — renders correct totals in Zone A and correct score chips in Zone B for all three players; newest hand appears leftmost in each chip row.
-
-**Phase 3 — Scoring interaction.** Full bi-phasic flow: declarer selection (highlights, enables Won/Lost); multiplier toggles (mutually exclusive, always tappable); Won/Lost toggle (enables outcome buttons); outcome buttons (live point-value labels, finalize hand, reset all pending state). Zone B and totals update on finalization.
-*Check:* complete Section 6 flow works end-to-end for both declarer-wins and declarer-loses cases; disabled states in the edge-case table all hold; reset is clean after each hand.
-
-**Phase 4 — Name editing, undo, new game.** Tap-to-edit name dialog; undo pops last round; new-game confirm dialog clears rounds but keeps names + language.
-*Check:* all three work and totals update live.
-
-**Phase 5 — Localization.** Strings interface + EN/PL + CompositionLocal + toggle button, persisted, no Activity recreation.
-*Check:* toggling instantly swaps every visible string; choice survives relaunch.
-
-**Phase 6 — Persistence & polish.** Wire DataStore on every mutation (including `pending` state); restore on launch; verify D/K/R tags render correctly in both languages; final recomposition-scope pass.
-*Check:* kill the app mid-game (with a hand in progress) and relaunch — full state (names, rounds, pending declarer/multiplier/won-lost, language) restored exactly.
-
----
-
-## 12. Resolved decisions (for reference)
-
-All questions confirmed by the owner. No open items remain.
-
-| Decision | Resolution |
-|---|---|
-| Scoring model | Bi-phasic: declarer + multiplier set pre-hand; Won/Lost + outcome set post-hand. Declarer win = declarer scores alone; declarer loss = both opponents score equally. |
-| Double/Redouble interaction | Non-sequential, always tappable, mutually exclusive (tap active to return to NORMAL) |
-| Round display order | Newest prepended (leftmost) in each player's chip row |
-| D/R tag placement | Next to the scoring player(s)' chip in their block; localized to K/R in PL |
-| Polish game terminology | Confirmed by native speaker — see Section 8 |
