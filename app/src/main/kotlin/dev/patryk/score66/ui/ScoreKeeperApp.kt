@@ -196,7 +196,9 @@ fun ScoreKeeperScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 state.players.forEach { player ->
-                    PlayerHistoryBlock(player = player, state = state)
+                    key(player.id) {
+                        PlayerHistoryBlock(player = player, state = state)
+                    }
                 }
             }
         }
@@ -241,16 +243,18 @@ fun DeclarerSelectorRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         state.players.forEach { player ->
-            val isSelected = state.pending?.declarerId == player.id
-            val total = state.totalFor(player.id)
-            PlayerSelectorCard(
-                name = player.name,
-                total = total,
-                isSelected = isSelected,
-                modifier = Modifier.weight(1f),
-                onClick = { onSelect(player.id) },
-                onLongClick = { onEditName(player.id, player.name) }
-            )
+            key(player.id) {
+                val isSelected = state.pending?.declarerId == player.id
+                val total = state.totalFor(player.id)
+                PlayerSelectorCard(
+                    name = player.name,
+                    total = total,
+                    isSelected = isSelected,
+                    modifier = Modifier.weight(1f),
+                    onClick = { onSelect(player.id) },
+                    onLongClick = { onEditName(player.id, player.name) }
+                )
+            }
         }
     }
 }
