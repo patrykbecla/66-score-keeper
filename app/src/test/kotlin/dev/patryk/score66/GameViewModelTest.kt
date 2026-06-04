@@ -8,6 +8,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
+import org.junit.Rule
 import org.junit.Test
 
 /**
@@ -15,6 +16,8 @@ import org.junit.Test
  * edge-case disabled-state table, and round-number correctness after undo+replay.
  */
 class GameViewModelTest {
+
+    @get:Rule val mainDispatcherRule = MainDispatcherRule()
 
     // ── Phase 1 — Declarer + multiplier ──────────────────────────────────────
 

@@ -41,6 +41,9 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -53,11 +56,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.patryk.score66.GameViewModel
 import dev.patryk.score66.data.AppState
+import dev.patryk.score66.data.DataStoreStorage
 import dev.patryk.score66.data.Language
 import dev.patryk.score66.data.Multiplier
 import dev.patryk.score66.data.PendingRound
 import dev.patryk.score66.data.Player
 import dev.patryk.score66.data.Round
+import dev.patryk.score66.data.dataStore
 import dev.patryk.score66.ui.theme.Gray
 import dev.patryk.score66.ui.theme.Red
 import dev.patryk.score66.ui.theme.Score66Theme
@@ -65,7 +70,18 @@ import dev.patryk.score66.ui.theme.Score66Theme
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 @Composable
-fun ScoreKeeperApp(vm: GameViewModel = viewModel()) {
+fun ScoreKeeperApp() {
+    val context = LocalContext.current
+    val vm: GameViewModel = viewModel(
+        factory = remember(context) {
+            object : ViewModelProvider.Factory {
+                override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                    @Suppress("UNCHECKED_CAST")
+                    return GameViewModel(DataStoreStorage(context.applicationContext.dataStore)) as T
+                }
+            }
+        }
+    )
     val state by vm.state.collectAsState()
     val strings = if (state.language == Language.EN) EnStrings else PlStrings
     CompositionLocalProvider(LocalStrings provides strings) {
