@@ -22,7 +22,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.BasicAlertDialog
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -39,6 +41,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
@@ -47,8 +50,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -84,18 +90,24 @@ fun ScoreKeeperApp() {
     )
     val state by vm.state.collectAsState()
     val strings = if (state.language == Language.EN) EnStrings else PlStrings
+    var showGraph by rememberSaveable { mutableStateOf(false) }
     CompositionLocalProvider(LocalStrings provides strings) {
-        ScoreKeeperScreen(
-            state = state,
-            onSelectDeclarer = vm::selectDeclarer,
-            onSetMultiplier = vm::setMultiplier,
-            onSetDeclarerWon = vm::setDeclarerWon,
-            onFinalizeHand = vm::finalizeHand,
-            onUndo = vm::undo,
-            onNewGame = vm::newGame,
-            onToggleLanguage = vm::toggleLanguage,
-            onEditPlayerName = vm::updatePlayerName
-        )
+        if (showGraph) {
+            GraphScreen(state = state, onNavigateHome = { showGraph = false })
+        } else {
+            ScoreKeeperScreen(
+                state = state,
+                onSelectDeclarer = vm::selectDeclarer,
+                onSetMultiplier = vm::setMultiplier,
+                onSetDeclarerWon = vm::setDeclarerWon,
+                onFinalizeHand = vm::finalizeHand,
+                onUndo = vm::undo,
+                onNewGame = vm::newGame,
+                onToggleLanguage = vm::toggleLanguage,
+                onEditPlayerName = vm::updatePlayerName,
+                onOpenGraph = { showGraph = true }
+            )
+        }
     }
 }
 
@@ -111,7 +123,8 @@ fun ScoreKeeperScreen(
     onUndo: () -> Unit = {},
     onNewGame: () -> Unit = {},
     onToggleLanguage: () -> Unit = {},
-    onEditPlayerName: (Int, String) -> Unit = { _, _ -> }
+    onEditPlayerName: (Int, String) -> Unit = { _, _ -> },
+    onOpenGraph: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val multiplier = state.pending?.multiplier ?: Multiplier.NORMAL
@@ -134,6 +147,7 @@ fun ScoreKeeperScreen(
                 Row {
                     TextButton(onClick = onUndo) { Text(strings.undo, color = Gray) }
                     TextButton(onClick = { showNewGameDialog = true }) { Text(strings.newGame, color = Gray) }
+                    TextButton(onClick = onOpenGraph) { Text(strings.graph, color = Gray) }
                 }
                 TextButton(onClick = onToggleLanguage) {
                     Text(
@@ -356,19 +370,22 @@ fun OutcomeRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         OutcomeButton(
-            label = "${strings.noTrick} • ${3 * multiplier.factor}",
+            text = strings.noTrick,
+            points = 3 * multiplier.factor,
             enabled = enabled,
             modifier = Modifier.weight(1f),
             onClick = { onFinalize(3) }
         )
         OutcomeButton(
-            label = "${strings.withTrick} • ${2 * multiplier.factor}",
+            text = strings.withTrick,
+            points = 2 * multiplier.factor,
             enabled = enabled,
             modifier = Modifier.weight(1f),
             onClick = { onFinalize(2) }
         )
         OutcomeButton(
-            label = "${strings.withHalf} • ${1 * multiplier.factor}",
+            text = strings.withHalf,
+            points = 1 * multiplier.factor,
             enabled = enabled,
             modifier = Modifier.weight(1f),
             onClick = { onFinalize(1) }
@@ -406,13 +423,14 @@ fun GameToggleButton(
             }
         )
     ) {
-        Text(label)
+        Text(label, fontSize = 16.sp)
     }
 }
 
 @Composable
 fun OutcomeButton(
-    label: String,
+    text: String,
+    points: Int,
     enabled: Boolean,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {}
@@ -430,7 +448,15 @@ fun OutcomeButton(
         ),
         border = BorderStroke(1.dp, if (enabled) Gray.copy(alpha = 0.55f) else Gray.copy(alpha = 0.2f))
     ) {
-        Text(label, textAlign = TextAlign.Center, fontSize = 12.sp, lineHeight = 15.sp)
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(fontSize = 12.sp)) { append(text) }
+                withStyle(SpanStyle(fontSize = 12.sp)) { append(" • ") }
+                withStyle(SpanStyle(fontSize = 16.sp)) { append(points.toString()) }
+            },
+            textAlign = TextAlign.Center,
+            lineHeight = 18.sp
+        )
     }
 }
 
@@ -540,22 +566,35 @@ fun EditNameDialog(
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NewGameConfirmDialog(
     strings: Strings,
     onConfirm: () -> Unit,
     onDismiss: () -> Unit
 ) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        text = { Text(strings.newGameConfirm) },
-        confirmButton = {
-            TextButton(onClick = onConfirm) { Text(strings.ok) }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text(strings.cancel) }
+    BasicAlertDialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(28.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh)
+        ) {
+            Column(modifier = Modifier.padding(start = 24.dp, top = 24.dp, end = 24.dp, bottom = 8.dp)) {
+                Text(
+                    text = strings.newGameConfirm,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) { Text(strings.cancel) }
+                    TextButton(onClick = onConfirm) { Text(strings.ok) }
+                }
+            }
         }
-    )
+    }
 }
 
 // ── Preview ───────────────────────────────────────────────────────────────────

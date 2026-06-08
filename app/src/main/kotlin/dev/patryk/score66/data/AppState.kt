@@ -50,4 +50,12 @@ data class AppState(
     val language: Language = Language.EN
 ) {
     fun totalFor(playerId: Int): Int = rounds.sumOf { it.pointsFor(playerId) }
+
+    fun cumulativeSeriesFor(playerId: Int): List<Int> {
+        var acc = 0
+        return buildList {
+            add(0)
+            rounds.forEach { acc += it.pointsFor(playerId); add(acc) }
+        }
+    }
 }

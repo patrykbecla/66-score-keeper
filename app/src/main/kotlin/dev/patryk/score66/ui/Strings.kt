@@ -18,7 +18,9 @@ data class Strings(
     val doubleTag: String,
     val redoubleTag: String,
     val cancel: String,
-    val ok: String
+    val ok: String,
+    val graph: String,
+    val home: String
 )
 
 val EnStrings = Strings(
@@ -37,7 +39,9 @@ val EnStrings = Strings(
     doubleTag = "D",
     redoubleTag = "R",
     cancel = "Cancel",
-    ok = "OK"
+    ok = "OK",
+    graph = "Graph",
+    home = "Home"
 )
 
 val PlStrings = Strings(
@@ -56,7 +60,9 @@ val PlStrings = Strings(
     doubleTag = "K",
     redoubleTag = "R",
     cancel = "Anuluj",
-    ok = "OK"
+    ok = "OK",
+    graph = "Wykres",
+    home = "Dom"
 )
 
 val LocalStrings = compositionLocalOf { EnStrings }
