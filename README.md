@@ -4,12 +4,14 @@ An Android score tracker for the card game 66 (Sechsundsechzig), built for 3 pla
 
 ## Features
 
-- Track scores across rounds with support for Double (Kontra) and Redouble (Rekontra) multipliers
-- Per-round history with score pills showing the round number, declarer, and points awarded
-- Editable player names (long-press a name to edit)
+- Track scores across rounds with Double (Kontra) and Redouble (Rekontra) multipliers
+- Per-round history with score pills showing round number, declarer, and points awarded
+- Score-over-time line graph per player
+- Game history — finished games are auto-archived; browse, rename, or delete past sessions
+- Editable player names (long-press to edit)
 - Undo last round
 - EN / PL language toggle
-- Scores persist across app restarts
+- All state persists across app restarts
 
 ## Scoring
 
