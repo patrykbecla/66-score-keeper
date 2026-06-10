@@ -1,6 +1,7 @@
 package dev.patryk.score66
 
 import dev.patryk.score66.data.AppState
+import dev.patryk.score66.data.GameSession
 import dev.patryk.score66.data.Language
 import dev.patryk.score66.data.Multiplier
 import dev.patryk.score66.data.PendingRound
@@ -144,5 +145,31 @@ class PersistenceTest {
         assertEquals("K", tagFor(Multiplier.DOUBLE))
         assertEquals("R", tagFor(Multiplier.REDOUBLE))
         assertEquals("",  tagFor(Multiplier.NORMAL))
+    }
+
+    // ── GameSession serialisation ─────────────────────────────────────────────
+
+    @Test
+    fun `AppState with history survives serialisation round-trip`() {
+        val session = GameSession(
+            id = 1000L, savedAt = 1000L, name = "Summer game",
+            players = listOf(Player(0, "Alice"), Player(1, "Bob"), Player(2, "Carol")),
+            rounds = listOf(
+                Round(1, declarerId = 0, declarerWon = true, basePoints = 3, multiplier = Multiplier.NORMAL),
+                Round(2, declarerId = 1, declarerWon = false, basePoints = 2, multiplier = Multiplier.DOUBLE),
+            )
+        )
+        val original = AppState(history = listOf(session))
+        val restored = json.decodeFromString<AppState>(json.encodeToString(original))
+
+        assertEquals(1, restored.history.size)
+        assertEquals(session, restored.history[0])
+    }
+
+    @Test
+    fun `AppState without history field defaults to empty list (backward compat)`() {
+        val legacyJson = """{"players":[{"id":0,"name":"Player 1"},{"id":1,"name":"Player 2"},{"id":2,"name":"Player 3"}],"rounds":[],"language":"EN"}"""
+        val restored = json.decodeFromString<AppState>(legacyJson)
+        assertEquals(emptyList<GameSession>(), restored.history)
     }
 }

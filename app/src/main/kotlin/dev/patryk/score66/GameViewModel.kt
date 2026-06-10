@@ -3,12 +3,14 @@ package dev.patryk.score66
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.patryk.score66.data.AppState
+import dev.patryk.score66.data.GameSession
 import dev.patryk.score66.data.Language
 import dev.patryk.score66.data.Multiplier
 import dev.patryk.score66.data.NoOpStorage
 import dev.patryk.score66.data.PendingRound
 import dev.patryk.score66.data.Round
 import dev.patryk.score66.data.StateStorage
+import dev.patryk.score66.data.formatSessionTimestamp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -66,7 +68,28 @@ class GameViewModel(
     }
 
     fun newGame() = mutate { s ->
-        s.copy(rounds = emptyList(), pending = null)
+        val history = if (s.rounds.isEmpty()) s.history else {
+            val ts = System.currentTimeMillis()
+            listOf(
+                GameSession(
+                    id = ts, savedAt = ts,
+                    name = formatSessionTimestamp(ts),
+                    players = s.players,
+                    rounds = s.rounds
+                )
+            ) + s.history
+        }
+        s.copy(rounds = emptyList(), pending = null, history = history)
+    }
+
+    fun deleteSession(id: Long) = mutate { s ->
+        s.copy(history = s.history.filterNot { it.id == id })
+    }
+
+    fun renameSession(id: Long, name: String) = mutate { s ->
+        s.copy(history = s.history.map {
+            if (it.id == id) it.copy(name = name.trim().ifEmpty { it.name }) else it
+        })
     }
 
     fun updatePlayerName(playerId: Int, name: String) = mutate { s ->

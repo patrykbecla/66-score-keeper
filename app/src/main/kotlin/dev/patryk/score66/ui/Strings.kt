@@ -20,7 +20,12 @@ data class Strings(
     val cancel: String,
     val ok: String,
     val graph: String,
-    val home: String
+    val home: String,
+    val history: String,
+    val rename: String,
+    val delete: String,
+    val deleteConfirm: String,
+    val emptyHistory: String
 )
 
 val EnStrings = Strings(
@@ -41,7 +46,12 @@ val EnStrings = Strings(
     cancel = "Cancel",
     ok = "OK",
     graph = "Graph",
-    home = "Home"
+    home = "Home",
+    history = "History",
+    rename = "Rename",
+    delete = "Delete",
+    deleteConfirm = "Delete this session?",
+    emptyHistory = "No saved games yet"
 )
 
 val PlStrings = Strings(
@@ -62,7 +72,12 @@ val PlStrings = Strings(
     cancel = "Anuluj",
     ok = "OK",
     graph = "Wykres",
-    home = "Dom"
+    home = "Dom",
+    history = "Historia",
+    rename = "Zmień nazwę",
+    delete = "Usuń",
+    deleteConfirm = "Usunąć tę sesję?",
+    emptyHistory = "Brak zapisanych gier"
 )
 
 val LocalStrings = compositionLocalOf { EnStrings }

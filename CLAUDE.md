@@ -1,250 +1,139 @@
-# 66 Score Counter — Android App Handoff
+# 66 Score Counter — Android App
 
-A minimal, battery-light Android app for tracking game-point scores in the card game **66 (Sechsundsechzig)** for 3 players. Built native in Kotlin + Jetpack Compose. No server, no network, no analytics, no background work.
+A minimal, battery-light Android app for tracking game-point scores in the card game **66 (Sechsundsechzig)** for 3 players. Native Kotlin + Jetpack Compose. No server, no network, no analytics, no background work.
 
-The App is now fully built and functional. All future changes may deviate from the details listed below.
-
----
-
-## 1. Scope & non-goals
-
-**In scope:** local score tracking, dark UI, editable player names, per-round scoring with double/redouble, EN/PL toggle, undo, new-game reset, persistence across process death.
-
-**Explicitly out of scope (do NOT build):** accounts, cloud sync, networking, statistics/history across games, animations beyond trivial state changes, settings screens, ads, sound, landscape-specific layouts (portrait only is fine).
+The app is fully built and functional. This doc describes the current state; future changes may deviate.
 
 ---
 
-## 2. Tech stack & project config
+## 0. Deploying to device
 
-- **Language:** Kotlin
-- **UI:** Jetpack Compose (Material 3)
-- **Architecture:** single `Activity`, single `ViewModel`, unidirectional state. No fragments, no navigation library (one screen).
-- **Persistence:** Preferences **DataStore** storing ONE serialized JSON string. Use `kotlinx.serialization`. Do **not** use Room.
-- **minSdk:** 24 · **targetSdk:** latest stable · **compileSdk:** latest stable
-- **Orientation:** portrait only (`android:screenOrientation="portrait"`).
-- **No** other dependencies unless strictly required by the above.
+The system Java (1.8) is too old for the Gradle/AGP in use — use Java 17 from Homebrew, run from the repo root:
 
----
+```bash
+JAVA_HOME=/usr/local/Cellar/openjdk@17/17.0.19/libexec/openjdk.jdk/Contents/Home ./gradlew installDebug
+```
 
-## 3. Game rules the scoring must implement
-
-Each hand has a **declarer** (the player who picked trump). The outcome buttons describe **the loser's situation** — which is the declarer if they lost, or the opponents if the declarer won. Points are assigned automatically based on whether the declarer won or lost.
-
-| Outcome button (EN) | Loser's situation                     | Base points |
-|---------------------|---------------------------------------|:-----------:|
-| No tricks           | Loser took **no tricks** (Schwarz)    | **3**       |
-| With trick          | Loser took a trick, stayed under 33 (Schneider) | **2** |
-| With half (33+)     | Loser reached **33+** card points     | **1**       |
-
-**Point assignment:**
-- **Declarer wins** → declarer gains `basePoints × multiplier`; both opponents gain 0.
-- **Declarer loses** → **both opponents each** gain `basePoints × multiplier`; declarer gains 0.
-
-**Multipliers (per hand):**
-
-- Normal: ×1 → awards **3 / 2 / 1**
-- **Double (Kontra):** ×2 → awards **6 / 4 / 2**
-- **Redouble (Rekontra):** ×4 → awards **12 / 8 / 4**
-
-**Multiplier toggles (non-sequential, always tappable — confirmed by owner):**
-- Both Double and Redouble buttons are **always enabled**.
-- Tapping an inactive button activates it and deactivates the other (mutually exclusive).
-- Tapping the currently active button deactivates it, returning to `NORMAL`.
+Installs directly to any connected ADB device. `./gradlew test` runs the unit tests.
 
 ---
 
-## 4. Data model
+## 1. Tech stack & architecture
+
+- **Kotlin + Jetpack Compose (Material 3)**, single `Activity`, single `GameViewModel`, unidirectional state.
+- **In-app navigation** is a `Route` enum (`MAIN`, `GRAPH`, `HISTORY_LIST`, `HISTORY_DETAIL`, `HISTORY_GRAPH`) switched in `ScoreKeeperApp`, with a `BackHandler`. No navigation library, no fragments.
+- **Persistence:** Preferences **DataStore** holding ONE serialized JSON string (`kotlinx.serialization`). Abstracted behind the `StateStorage` interface — `DataStoreStorage` in the app, `NoOpStorage` for tests/previews. No Room.
+- **minSdk 24**, targetSdk/compileSdk latest stable. **Portrait only**, always-dark theme.
+- Custom variable font **Exo2** (`theme/Fonts.kt`) for names/labels. No other non-essential dependencies.
+
+---
+
+## 2. Game rules (scoring)
+
+Each hand has a **declarer** (picked trump). The outcome buttons describe **the loser's situation** (the declarer if they lost, the opponents if the declarer won). Points are assigned automatically from declarer-won/lost.
+
+| Outcome button (EN) | Loser's situation                               | Base points |
+|---------------------|-------------------------------------------------|:-----------:|
+| No tricks           | Loser took **no tricks** (Schwarz)              | **3**       |
+| With trick          | Loser took a trick, stayed under 33 (Schneider) | **2**       |
+| With half           | Loser reached **33+** card points               | **1**       |
+
+**Point assignment** (`Round.pointsFor`):
+- **Declarer wins** → declarer gains `basePoints × multiplier`; opponents gain 0.
+- **Declarer loses** → **each opponent** gains `basePoints × multiplier`; declarer gains 0.
+
+**Multipliers:** Normal ×1 (3/2/1) · **Double (Kontra)** ×2 (6/4/2) · **Redouble (Re)** ×4 (12/8/4).
+Both multiplier buttons are always tappable and mutually exclusive: tap an inactive one to switch, tap the active one to return to NORMAL.
+
+---
+
+## 3. Data model (`data/AppState.kt`)
 
 ```kotlin
-@Serializable
-data class Player(
-    val id: Int,            // 0, 1, 2 — stable
-    val name: String        // editable, defaults "Player 1/2/3"
-)
+@Serializable data class Player(val id: Int, val name: String)        // ids 0/1/2 stable
 
-@Serializable
-enum class Multiplier(val factor: Int) {
-    NORMAL(1), DOUBLE(2), REDOUBLE(4)
-    // Display tags ("D"/"R" in EN, "K"/"R" in PL) come from the Strings layer, not hardcoded here
-}
+@Serializable enum class Multiplier(val factor: Int) { NORMAL(1), DOUBLE(2), REDOUBLE(4) }
 
-@Serializable
-data class Round(
-    val number: Int,            // sequential hand number, assigned at finalization (see Section 6)
-    val declarerId: Int,        // which player declared trump
-    val declarerWon: Boolean,   // true = declarer scored; false = both opponents scored
-    val basePoints: Int,        // 3, 2, or 1 (from the outcome button)
-    val multiplier: Multiplier
+@Serializable data class Round(
+    val number: Int, val declarerId: Int, val declarerWon: Boolean,
+    val basePoints: Int, val multiplier: Multiplier
 ) {
-    val awarded: Int get() = basePoints * multiplier.factor
+    val awarded get() = basePoints * multiplier.factor
+    fun pointsFor(playerId: Int): Int    // awarded to the right side, else 0
 }
 
-// Tracks a hand that has been started (declarer + multiplier set) but not yet scored
-@Serializable
-data class PendingRound(
+@Serializable data class PendingRound(   // a hand in progress, null when none
     val declarerId: Int,
     val multiplier: Multiplier = Multiplier.NORMAL,
-    val declarerWon: Boolean? = null   // null until Won/Lost is tapped
+    val declarerWon: Boolean? = null     // null until Won/Lost tapped
 )
 
-@Serializable
-enum class Language { EN, PL }
+@Serializable enum class Language { EN, PL }
 
-@Serializable
-data class AppState(
-    val players: List<Player> = listOf(
-        Player(0, "Player 1"), Player(1, "Player 2"), Player(2, "Player 3")
-    ),
+@Serializable data class GameSession(    // an archived finished game
+    val id: Long, val savedAt: Long, val name: String,
+    val players: List<Player>, val rounds: List<Round>
+)
+
+@Serializable data class AppState(
+    val players: List<Player> = /* Player 1/2/3 */,
     val rounds: List<Round> = emptyList(),
-    val pending: PendingRound? = null,  // non-null while a hand is in progress
-    val language: Language = Language.EN
-)
+    val pending: PendingRound? = null,
+    val language: Language = Language.EN,
+    val history: List<GameSession> = emptyList()
+) {
+    fun totalFor(playerId: Int): Int                 // sum of pointsFor across rounds
+    fun cumulativeSeriesFor(playerId: Int): List<Int> // [0, running totals...] for the graph
+}
 ```
 
-**Derived values (compute, never store):**
-- Points earned by player `p` in round `r`:
-  - If `r.declarerWon && p.id == r.declarerId` → `r.awarded`
-  - If `!r.declarerWon && p.id != r.declarerId` → `r.awarded`
-  - Otherwise → 0
-- Running total for player `p` = sum of the above across all rounds.
-- Declarer initial for round `r` = first character of the name of the player whose `id == r.declarerId`, uppercased.
-- Multiplier chip tag = `strings.doubleTag` if `DOUBLE`, `strings.redoubleTag` if `REDOUBLE`, empty if `NORMAL`.
+Derived values (totals, declarer initial, cumulative series) are computed, never stored.
 
 ---
 
-## 5. Screen layout (single screen, portrait)
+## 4. Main screen layout (`ui/ScoreKeeperApp.kt`)
 
-The screen is split into two vertical zones:
+**Top bar:** left = horizontally-scrollable row of **Undo / New game / Graph / History** text buttons; right = **language toggle** showing the *other* language ("PL" while in EN).
 
-### Zone A — Controls (fixed, never scrolls, top of screen)
+**Zone A — fixed controls:**
+1. **Declarer selector row** — 3 equal cards: uppercased name + large bold total. Tap = select declarer; long-press = edit-name dialog. Selected card is highlighted.
+2. **Multiplier + Won/Lost row** — one row of four buttons: **Double · Re · Won · Lost**. Won/Lost disabled until a declarer is selected. Active buttons filled.
+3. **Outcome row** — 3 buttons **No tricks · With trick · With half**, each rendered as `label • points` with the multiplier already applied (e.g. `No tricks • 6`). Disabled until Won/Lost is set.
 
-1. **App bar:** title (small) on the left; **language toggle** (shows the *other* language, e.g. "PL" when in EN) on the right.
-2. **Declarer selector row** — three equal tap targets side by side, each showing:
-   - Editable **name** (medium, white). Tap-and-hold (or a dedicated small edit icon) to open a small edit dialog. Regular tap = select as declarer.
-   - **Running total** (large, white, bold) directly under the name.
-   - Visibly highlighted when that player is the selected declarer.
-3. **Multiplier row** — two buttons: **Double** and **Redouble**. Both always enabled. Active state clearly indicated. Tapping the active button deactivates it; tapping the other switches to it.
-4. **Won/Lost row** — two buttons: **Won** and **Lost**. Disabled until a declarer is selected. Visibly toggled when one is active.
-5. **Outcome button row** — three buttons, left→right: **No tricks / With trick / With half (33+)**. Each shows its current effective point value in parentheses (e.g. "No tricks (6)" when Double is active). Disabled until Won/Lost is selected.
-6. **Utility row** — **Undo** on the left, **New game** on the right.
-
-> **UI state summary:**
-> - No declarer selected → Won/Lost disabled, outcome buttons disabled.
-> - Declarer selected, no Won/Lost → outcome buttons disabled.
-> - Declarer + Won/Lost selected → outcome buttons enabled. Tapping one completes the hand.
-
-### Zone B — Hand history (scrollable, below controls)
-
-Three stacked player blocks, one per player, in the same left-to-right order as the selector row above. Each block contains:
-
-- **Player label** (small, dimmed) — name only, for reference while scrolling.
-- **Score sub-row** — a wrapping flow of score pills, newest prepended on the left. **Pills only appear when that player scored that hand** — no blank/`–` placeholders. Each pill is a small card with a 2×2 layout:
-
-```
-┌─────────────────┐
-│ #N          [score] │
-│ [initial]     [tag] │
-└─────────────────┘
-```
-
-  - **Top-left:** round number (small, gray) e.g. `3`
-  - **Bottom-left:** declarer's initial (small, gray) e.g. `E`
-  - **Right / main:** awarded points (large, white, right-aligned) e.g. `2`
-  - **Bottom-right:** multiplier tag (small, **red**, right-aligned) — `D`/`K` or `R` only if that hand was doubled/redoubled; absent otherwise
-
-  Example pill — round 3, declarer Ethan, 2 points, Doubled: top-left `3`, bottom-left `E`, right `2`, bottom-right red `D`.
-
-A vertical scrollbar appears on the right edge of Zone B when content exceeds the visible area (roughly 4 chip-rows deep). No hand-count limit.
+**Zone B — scrollable history:** one block per player (same order as selectors): uppercased name + a `FlowRow` of **score pills**, newest first. A pill appears only for hands that player scored. Each pill shows round number (top-left, gray), declarer initial (bottom-left, gray), and awarded points (right, large white). The multiplier is conveyed by a **red-tinted card background** (darker for Double, brighter for Redouble) — not a letter tag.
 
 ---
 
-## 6. Interaction flow (the core loop)
+## 5. Interaction flow
 
-The flow is **bi-phasic**: the declarer and multiplier are set *before* the hand is played; the outcome is entered *after*.
+Bi-phasic — declarer + multiplier set *before* the hand, outcome entered *after*:
 
-### Phase 1 — Before the hand
+1. Tap a player selector → sets `pending.declarerId`; Won/Lost enable.
+2. (Optional) tap Double/Re → sets `pending.multiplier`.
+3. Tap Won/Lost → sets `pending.declarerWon`; outcome buttons enable.
+4. Tap an outcome → finalize: `number = rounds.size + 1`, append a `Round`, clear `pending`. Totals/pills update immediately.
 
-1. Tap a **player selector** → sets `pending.declarerId`; that selector highlights. Won/Lost buttons enable.
-2. (Optional) Tap **Double** or **Redouble** → sets `pending.multiplier`; tapping the active button returns to `NORMAL`; tapping the other switches to it.
-
-At this point the hand is played.
-
-### Phase 2 — After the hand
-
-3. Tap **Won** or **Lost** → sets `pending.declarerWon`; that button highlights. Outcome buttons enable.
-4. Tap one **outcome button** (No tricks / With trick / With half) → completes the hand:
-   - `round.number` is assigned as `currentRounds.size + 1` at the moment of finalization (so after an undo + replay, the slot number is correctly reused).
-   - A `Round` is finalized from `pending` + `basePoints` (3/2/1) and prepended to Zone B.
-   - Points are assigned per Section 3: declarer gets `awarded` if they won; both opponents each get `awarded` if the declarer lost.
-   - **Reset:** clear `pending` entirely (declarer, multiplier, Won/Lost all reset). Running totals and score chips update immediately.
-
-### Utility actions
-
-- **Undo** — removes the most recently prepended round; running totals update. No-op if no rounds exist. Does **not** restore a cleared `pending` state.
-- **New game** — confirm dialog → clears all rounds and `pending`; names and language preserved.
-
-### Edge-case summary
-
-| State | Won/Lost buttons | Outcome buttons |
-|---|---|---|
-| No declarer selected | Disabled | Disabled |
-| Declarer selected, no Won/Lost | Enabled | Disabled |
-| Declarer + Won/Lost selected | Enabled | **Enabled** |
+**Undo** drops the most recent round (no-op if none; does not restore `pending`).
+**New game** → confirm dialog → archives the current game into `history` (named by timestamp) if it has rounds, then clears rounds and `pending`. Names and language are preserved.
 
 ---
 
-## 7. Theme
+## 6. History & graph
 
-- Material 3 **dark** color scheme, applied always (do not follow system light/dark — always dark).
-- Background near-black (helps OLED battery). Player totals and names in **white**; round numbers white but smaller. Buttons with a muted accent.
-- No custom fonts required; system default is fine. Bold weight for totals.
-
----
-
-## 8. Localization
-
-Small fixed string set — do **not** use Android string resources/locale switching. Instead:
-
-- Define a `Strings` interface (or data class) with one field per UI string; provide `EnStrings` and `PlStrings`.
-- Expose via a Compose `CompositionLocal` (e.g. `LocalStrings`), driven by `AppState.language`.
-- Language toggle flips `EN ⇄ PL` in the ViewModel and persists it. **No Activity recreation.**
-
-Strings to translate (provide both):
-
-| key            | EN                  | PL                                                               |
-|----------------|---------------------|------------------------------------------------------------------|
-| appTitle       | 66 Counter          | Licznik 66                                                       |
-| noTrick        | No tricks           | Bez sztycha                                                      |
-| withTrick      | With trick          | Z sztychem                                                       |
-| withHalf       | With half (33+)     | Z wodą                                                           |
-| won            | Won                 | Wygrana                                                          |
-| lost           | Lost                | Przegrana                                                        |
-| double         | Double              | Kontra                                                           |
-| redouble       | Redouble            | Rekontra                                                         |
-| undo           | Undo                | Cofnij                                                           |
-| newGame        | New game            | Nowa gra                                                         |
-| newGameConfirm | Start a new game? Scores will be cleared. | Rozpocząć nową grę? Wyniki zostaną wyczyszczone. |
-| editName       | Edit name           | Edytuj imię                                                      |
-| doubleTag      | D                   | K                                                                |
-| redoubleTag    | R                   | R                                                                |
-| cancel         | Cancel              | Anuluj                                                           |
-| ok             | OK                  | OK                                                               |
+- **Graph** (`ui/GraphScreen.kt`): per-player totals row + a step-style cumulative line chart (Canvas) with axis labels and per-player colors (`theme/Color.kt playerColor`). Reachable from the main bar and from a session detail.
+- **History list** (`ui/HistoryScreen.kt`): saved `GameSession`s, newest first, each with rename and delete (confirm dialog).
+- **History detail**: read-only declarer row + per-player pills for that session, with a button to its own graph.
 
 ---
 
-## 9. Persistence
+## 7. Localization (`ui/Strings.kt`)
 
-- Hold `AppState` as `StateFlow` in the ViewModel.
-- On **every** mutation, serialize `AppState` to JSON and write the single string to Preferences DataStore. Writes are tiny and only happen on user taps — negligible battery/IO.
-- On launch, read and deserialize; fall back to default `AppState` if absent or corrupt.
+No Android string resources. A `Strings` data class with `EnStrings`/`PlStrings`, exposed via `LocalStrings` (a `CompositionLocal`) driven by `AppState.language`. The toggle flips EN⇄PL in the ViewModel and persists it — **no Activity recreation**. Add new UI text by adding a field to `Strings` and both instances.
 
 ---
 
-## 10. Battery / performance notes
+## 8. Theme & performance
 
-This app is inherently low-power; do not over-engineer. Just avoid the few real pitfalls:
-
-- No background services, `WorkManager`, polling, networking, or wake locks.
-- Do **not** keep the screen on (no `FLAG_KEEP_SCREEN_ON`).
-- Keep Compose recompositions scoped: hoist state, use stable/immutable data classes, avoid recomposing the whole tree on each tap. Use `key`s in the round list.
-- Always-dark theme reduces OLED draw.
+- Material 3 **dark** scheme always (`theme/Theme.kt`), near-black background for OLED battery; totals/names white and bold.
+- Inherently low-power: no background services, `WorkManager`, polling, networking, wake locks, or `FLAG_KEEP_SCREEN_ON`.
+- Keep recompositions scoped — hoist state, immutable data classes, `key`s in lists. Persistence writes only happen on user taps (tiny JSON), so battery/IO is negligible.

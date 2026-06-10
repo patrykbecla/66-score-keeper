@@ -208,4 +208,88 @@ class GameViewModelTest {
         assertNull(state.pending)
         assertEquals("Alice", state.players[0].name)
     }
+
+    // ── Session history ───────────────────────────────────────────────────────
+
+    @Test
+    fun `newGame with rounds saves session to history`() {
+        val vm = GameViewModel()
+        vm.updatePlayerName(0, "Alice")
+        vm.selectDeclarer(0); vm.setDeclarerWon(true); vm.finalizeHand(3)
+
+        val roundsBefore = vm.state.value.rounds.toList()
+        val playersBefore = vm.state.value.players.toList()
+        vm.newGame()
+
+        val state = vm.state.value
+        assertEquals(1, state.history.size)
+        assertEquals(roundsBefore, state.history[0].rounds)
+        assertEquals(playersBefore, state.history[0].players)
+        assertEquals(0, state.rounds.size)
+        assertNull(state.pending)
+    }
+
+    @Test
+    fun `newGame with empty rounds does not add session to history`() {
+        val vm = GameViewModel()
+        vm.newGame()
+        assertEquals(0, vm.state.value.history.size)
+    }
+
+    @Test
+    fun `multiple newGame calls accumulate sessions newest first`() {
+        val vm = GameViewModel()
+        vm.selectDeclarer(0); vm.setDeclarerWon(true); vm.finalizeHand(3)
+        vm.newGame()
+        vm.selectDeclarer(1); vm.setDeclarerWon(false); vm.finalizeHand(2)
+        vm.newGame()
+
+        val history = vm.state.value.history
+        assertEquals(2, history.size)
+        // Second newGame session should be prepended (savedAt >= first)
+        assertTrue(history[0].savedAt >= history[1].savedAt)
+    }
+
+    @Test
+    fun `deleteSession removes only the targeted session`() {
+        val vm = GameViewModel()
+        vm.selectDeclarer(0); vm.setDeclarerWon(true); vm.finalizeHand(3)
+        vm.newGame()
+        vm.selectDeclarer(1); vm.setDeclarerWon(false); vm.finalizeHand(2)
+        vm.newGame()
+
+        val history = vm.state.value.history
+        assertEquals(2, history.size)
+        val idToDelete = history[1].id
+        vm.deleteSession(idToDelete)
+
+        val remaining = vm.state.value.history
+        assertEquals(1, remaining.size)
+        assertEquals(history[0].id, remaining[0].id)
+    }
+
+    @Test
+    fun `renameSession updates only the targeted session name`() {
+        val vm = GameViewModel()
+        vm.selectDeclarer(0); vm.setDeclarerWon(true); vm.finalizeHand(3)
+        vm.newGame()
+
+        val id = vm.state.value.history[0].id
+        vm.renameSession(id, "Summer game")
+
+        assertEquals("Summer game", vm.state.value.history[0].name)
+    }
+
+    @Test
+    fun `renameSession with blank name keeps original name`() {
+        val vm = GameViewModel()
+        vm.selectDeclarer(0); vm.setDeclarerWon(true); vm.finalizeHand(3)
+        vm.newGame()
+
+        val id = vm.state.value.history[0].id
+        val originalName = vm.state.value.history[0].name
+        vm.renameSession(id, "   ")
+
+        assertEquals(originalName, vm.state.value.history[0].name)
+    }
 }

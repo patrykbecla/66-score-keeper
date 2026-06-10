@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -43,6 +44,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -73,6 +75,10 @@ import dev.patryk.score66.ui.theme.Exo2
 import dev.patryk.score66.ui.theme.Gray
 import dev.patryk.score66.ui.theme.Score66Theme
 
+// ── Navigation ────────────────────────────────────────────────────────────────
+
+private enum class Route { MAIN, GRAPH, HISTORY_LIST, HISTORY_DETAIL, HISTORY_GRAPH }
+
 // ── Entry point ──────────────────────────────────────────────────────────────
 
 @Composable
@@ -90,12 +96,51 @@ fun ScoreKeeperApp() {
     )
     val state by vm.state.collectAsState()
     val strings = if (state.language == Language.EN) EnStrings else PlStrings
-    var showGraph by rememberSaveable { mutableStateOf(false) }
+    var route by rememberSaveable { mutableStateOf(Route.MAIN) }
+    var detailSessionId by rememberSaveable { mutableStateOf(-1L) }
+    BackHandler(enabled = route != Route.MAIN) {
+        route = when (route) {
+            Route.GRAPH -> Route.MAIN
+            Route.HISTORY_LIST -> Route.MAIN
+            Route.HISTORY_DETAIL -> Route.HISTORY_LIST
+            Route.HISTORY_GRAPH -> Route.HISTORY_DETAIL
+            Route.MAIN -> Route.MAIN
+        }
+    }
     CompositionLocalProvider(LocalStrings provides strings) {
-        if (showGraph) {
-            GraphScreen(state = state, onNavigateHome = { showGraph = false })
-        } else {
-            ScoreKeeperScreen(
+        when (route) {
+            Route.GRAPH -> GraphScreen(state = state, onNavigateHome = { route = Route.MAIN })
+            Route.HISTORY_LIST -> HistoryListScreen(
+                sessions = state.history,
+                onOpenSession = { id -> detailSessionId = id; route = Route.HISTORY_DETAIL },
+                onRename = vm::renameSession,
+                onDelete = vm::deleteSession,
+                onNavigateHome = { route = Route.MAIN }
+            )
+            Route.HISTORY_DETAIL -> {
+                val session = state.history.firstOrNull { it.id == detailSessionId }
+                if (session == null) {
+                    route = Route.HISTORY_LIST
+                } else {
+                    HistoryDetailScreen(
+                        session = session,
+                        onNavigateBack = { route = Route.HISTORY_LIST },
+                        onOpenGraph = { route = Route.HISTORY_GRAPH }
+                    )
+                }
+            }
+            Route.HISTORY_GRAPH -> {
+                val session = state.history.firstOrNull { it.id == detailSessionId }
+                if (session == null) {
+                    route = Route.HISTORY_LIST
+                } else {
+                    GraphScreen(
+                        state = AppState(players = session.players, rounds = session.rounds),
+                        onNavigateHome = { route = Route.HISTORY_DETAIL }
+                    )
+                }
+            }
+            Route.MAIN -> ScoreKeeperScreen(
                 state = state,
                 onSelectDeclarer = vm::selectDeclarer,
                 onSetMultiplier = vm::setMultiplier,
@@ -105,7 +150,8 @@ fun ScoreKeeperApp() {
                 onNewGame = vm::newGame,
                 onToggleLanguage = vm::toggleLanguage,
                 onEditPlayerName = vm::updatePlayerName,
-                onOpenGraph = { showGraph = true }
+                onOpenGraph = { route = Route.GRAPH },
+                onOpenHistory = { route = Route.HISTORY_LIST }
             )
         }
     }
@@ -124,7 +170,8 @@ fun ScoreKeeperScreen(
     onNewGame: () -> Unit = {},
     onToggleLanguage: () -> Unit = {},
     onEditPlayerName: (Int, String) -> Unit = { _, _ -> },
-    onOpenGraph: () -> Unit = {}
+    onOpenGraph: () -> Unit = {},
+    onOpenHistory: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val multiplier = state.pending?.multiplier ?: Multiplier.NORMAL
@@ -144,10 +191,11 @@ fun ScoreKeeperScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row {
+                Row(modifier = Modifier.horizontalScroll(rememberScrollState())) {
                     TextButton(onClick = onUndo) { Text(strings.undo, color = Gray) }
                     TextButton(onClick = { showNewGameDialog = true }) { Text(strings.newGame, color = Gray) }
                     TextButton(onClick = onOpenGraph) { Text(strings.graph, color = Gray) }
+                    TextButton(onClick = onOpenHistory) { Text(strings.history, color = Gray) }
                 }
                 TextButton(onClick = onToggleLanguage) {
                     Text(
@@ -500,8 +548,8 @@ fun PlayerHistoryBlock(player: Player, state: AppState) {
 @Composable
 fun ScorePill(roundNumber: Int, declarerInitial: String, score: Int, multiplier: Multiplier = Multiplier.NORMAL) {
     val containerColor = when (multiplier) {
-        Multiplier.DOUBLE -> Color(0xFF2A1818)
-        Multiplier.REDOUBLE -> Color(0xFF351010)
+        Multiplier.DOUBLE -> Color(0xFF351010)
+        Multiplier.REDOUBLE -> Color(0xFF4f1010)
         Multiplier.NORMAL -> MaterialTheme.colorScheme.surface
     }
     Card(
@@ -542,12 +590,13 @@ fun EditNameDialog(
     currentName: String,
     strings: Strings,
     onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    title: String = strings.editName
 ) {
     var name by remember { mutableStateOf(currentName) }
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(strings.editName, color = Color.White) },
+        title = { Text(title, color = Color.White) },
         text = {
             OutlinedTextField(
                 value = name,

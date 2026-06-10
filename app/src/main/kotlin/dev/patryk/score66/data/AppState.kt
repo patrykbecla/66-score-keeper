@@ -41,13 +41,23 @@ data class PendingRound(
 enum class Language { EN, PL }
 
 @Serializable
+data class GameSession(
+    val id: Long,
+    val savedAt: Long,
+    val name: String,
+    val players: List<Player>,
+    val rounds: List<Round>
+)
+
+@Serializable
 data class AppState(
     val players: List<Player> = listOf(
         Player(0, "Player 1"), Player(1, "Player 2"), Player(2, "Player 3")
     ),
     val rounds: List<Round> = emptyList(),
     val pending: PendingRound? = null,
-    val language: Language = Language.EN
+    val language: Language = Language.EN,
+    val history: List<GameSession> = emptyList()
 ) {
     fun totalFor(playerId: Int): Int = rounds.sumOf { it.pointsFor(playerId) }
 
