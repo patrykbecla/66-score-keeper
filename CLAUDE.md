@@ -8,10 +8,10 @@ The app is fully built and functional. This doc describes the current state; fut
 
 ## 0. Deploying to device
 
-The system Java (1.8) is too old for the Gradle/AGP in use — use Java 17 from Homebrew, run from the repo root:
+The system Java (1.8) is too old for the Gradle/AGP in use — use Java 21 from Homebrew, run from the repo root:
 
 ```bash
-JAVA_HOME=/usr/local/Cellar/openjdk@17/17.0.19/libexec/openjdk.jdk/Contents/Home ./gradlew installDebug
+JAVA_HOME=/usr/local/Cellar/openjdk@21/21.0.11/libexec/openjdk.jdk/Contents/Home ./gradlew installDebug
 ```
 
 Installs directly to any connected ADB device. `./gradlew test` runs the unit tests.

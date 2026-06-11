@@ -136,7 +136,7 @@ class GameViewModel(
         // If switching to 3P, clear pending if it references player 3
         val newPending = if (!newFourPlayer) {
             s.pending?.let { p ->
-                if (p.declarerId == 3 || p.watcherId == 3) null else p
+                if (p.declarerId == 3) null else p.copy(watcherId = null)
             }
         } else s.pending
         s.copy(fourPlayer = newFourPlayer, pending = newPending)
