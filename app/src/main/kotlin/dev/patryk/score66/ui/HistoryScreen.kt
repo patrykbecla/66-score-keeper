@@ -194,7 +194,7 @@ fun HistoryDetailScreen(
 ) {
     val strings = LocalStrings.current
     val state = remember(session) {
-        AppState(players = session.players, rounds = session.rounds)
+        AppState(players = session.players, rounds = session.rounds, fourPlayer = session.players.size == 4)
     }
 
     Scaffold(
@@ -225,7 +225,7 @@ fun HistoryDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Spacer(Modifier.height(4.dp))
-                DeclarerSelectorRow(state = state)
+                DeclarerSelectorRow(state = state, showWatcherIcons = false)
                 Spacer(Modifier.height(4.dp))
             }
 
@@ -239,7 +239,7 @@ fun HistoryDetailScreen(
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                state.players.forEach { player ->
+                state.activePlayers.forEach { player ->
                     key(player.id) {
                         PlayerHistoryBlock(player = player, state = state)
                     }

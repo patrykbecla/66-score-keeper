@@ -25,7 +25,9 @@ data class Strings(
     val rename: String,
     val delete: String,
     val deleteConfirm: String,
-    val emptyHistory: String
+    val emptyHistory: String,
+    val threePlayer: String,
+    val fourPlayer: String
 )
 
 val EnStrings = Strings(
@@ -51,7 +53,9 @@ val EnStrings = Strings(
     rename = "Rename",
     delete = "Delete",
     deleteConfirm = "Delete this session?",
-    emptyHistory = "No saved games yet"
+    emptyHistory = "No saved games yet",
+    threePlayer = "3P",
+    fourPlayer = "4P"
 )
 
 val PlStrings = Strings(
@@ -77,7 +81,9 @@ val PlStrings = Strings(
     rename = "Zmień nazwę",
     delete = "Usuń",
     deleteConfirm = "Usunąć tę sesję?",
-    emptyHistory = "Brak zapisanych gier"
+    emptyHistory = "Brak zapisanych gier",
+    threePlayer = "3G",
+    fourPlayer = "4G"
 )
 
 val LocalStrings = compositionLocalOf { EnStrings }

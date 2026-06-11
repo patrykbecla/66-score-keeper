@@ -2,6 +2,7 @@ package dev.patryk.score66.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.PaddingValues
@@ -135,7 +136,7 @@ fun ScoreKeeperApp() {
                     route = Route.HISTORY_LIST
                 } else {
                     GraphScreen(
-                        state = AppState(players = session.players, rounds = session.rounds),
+                        state = AppState(players = session.players, rounds = session.rounds, fourPlayer = session.players.size == 4),
                         onNavigateHome = { route = Route.HISTORY_DETAIL }
                     )
                 }
@@ -143,12 +144,14 @@ fun ScoreKeeperApp() {
             Route.MAIN -> ScoreKeeperScreen(
                 state = state,
                 onSelectDeclarer = vm::selectDeclarer,
+                onSetWatcher = vm::setWatcher,
                 onSetMultiplier = vm::setMultiplier,
                 onSetDeclarerWon = vm::setDeclarerWon,
                 onFinalizeHand = vm::finalizeHand,
                 onUndo = vm::undo,
                 onNewGame = vm::newGame,
                 onToggleLanguage = vm::toggleLanguage,
+                onTogglePlayerMode = vm::togglePlayerMode,
                 onEditPlayerName = vm::updatePlayerName,
                 onOpenGraph = { route = Route.GRAPH },
                 onOpenHistory = { route = Route.HISTORY_LIST }
@@ -163,20 +166,23 @@ fun ScoreKeeperApp() {
 fun ScoreKeeperScreen(
     state: AppState,
     onSelectDeclarer: (Int) -> Unit = {},
+    onSetWatcher: (Int) -> Unit = {},
     onSetMultiplier: (Multiplier) -> Unit = {},
     onSetDeclarerWon: (Boolean) -> Unit = {},
     onFinalizeHand: (Int) -> Unit = {},
     onUndo: () -> Unit = {},
     onNewGame: () -> Unit = {},
     onToggleLanguage: () -> Unit = {},
+    onTogglePlayerMode: () -> Unit = {},
     onEditPlayerName: (Int, String) -> Unit = { _, _ -> },
     onOpenGraph: () -> Unit = {},
     onOpenHistory: () -> Unit = {}
 ) {
     val strings = LocalStrings.current
     val multiplier = state.pending?.multiplier ?: Multiplier.NORMAL
-    val hasDeclarerSelected = state.pending != null
+    val hasDeclarerSelected = state.pending?.declarerId != null
     val hasWonLost = state.pending?.declarerWon != null
+    val watcherOk = !state.fourPlayer || state.pending?.watcherId != null
 
     var editingPlayerId by remember { mutableStateOf<Int?>(null) }
     var showNewGameDialog by remember { mutableStateOf(false) }
@@ -197,9 +203,20 @@ fun ScoreKeeperScreen(
                     TextButton(onClick = onOpenGraph) { Text(strings.graph, color = Gray) }
                     TextButton(onClick = onOpenHistory) { Text(strings.history, color = Gray) }
                 }
-                TextButton(onClick = onToggleLanguage) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = if (state.fourPlayer) strings.threePlayer else strings.fourPlayer,
+                        modifier = Modifier
+                            .clickable(onClick = onTogglePlayerMode)
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold
+                    )
                     Text(
                         text = if (state.language == Language.EN) "PL" else "EN",
+                        modifier = Modifier
+                            .clickable(onClick = onToggleLanguage)
+                            .padding(horizontal = 8.dp, vertical = 10.dp),
                         color = Color.White,
                         fontWeight = FontWeight.Bold
                     )
@@ -224,7 +241,8 @@ fun ScoreKeeperScreen(
                 DeclarerSelectorRow(
                     state = state,
                     onSelect = onSelectDeclarer,
-                    onEditName = { id, _ -> editingPlayerId = id }
+                    onEditName = { id, _ -> editingPlayerId = id },
+                    onToggleWatcher = onSetWatcher
                 )
                 MultiplierWonLostRow(
                     activeMultiplier = multiplier,
@@ -235,7 +253,7 @@ fun ScoreKeeperScreen(
                 )
                 OutcomeRow(
                     multiplier = multiplier,
-                    enabled = hasWonLost,
+                    enabled = hasWonLost && watcherOk,
                     onFinalize = onFinalizeHand
                 )
                 Spacer(Modifier.height(4.dp))
@@ -252,7 +270,7 @@ fun ScoreKeeperScreen(
                     .padding(horizontal = 12.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                state.players.forEach { player ->
+                state.activePlayers.forEach { player ->
                     key(player.id) {
                         PlayerHistoryBlock(player = player, state = state)
                     }
@@ -293,23 +311,29 @@ fun ScoreKeeperScreen(
 fun DeclarerSelectorRow(
     state: AppState,
     onSelect: (Int) -> Unit = {},
-    onEditName: (Int, String) -> Unit = { _, _ -> }
+    onEditName: (Int, String) -> Unit = { _, _ -> },
+    onToggleWatcher: (Int) -> Unit = {},
+    showWatcherIcons: Boolean = true
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        state.players.forEach { player ->
+        state.activePlayers.forEach { player ->
             key(player.id) {
                 val isSelected = state.pending?.declarerId == player.id
+                val isWatcher = state.pending?.watcherId == player.id
                 val total = state.totalFor(player.id)
                 PlayerSelectorCard(
                     name = player.name,
                     total = total,
                     isSelected = isSelected,
+                    isFourPlayer = state.fourPlayer && showWatcherIcons,
+                    isWatcher = isWatcher,
                     modifier = Modifier.weight(1f),
-                    onClick = { onSelect(player.id) },
-                    onLongClick = { onEditName(player.id, player.name) }
+                    onClick = { if (!isWatcher) onSelect(player.id) },
+                    onLongClick = { onEditName(player.id, player.name) },
+                    onToggleWatcher = { onToggleWatcher(player.id) }
                 )
             }
         }
@@ -322,10 +346,15 @@ fun PlayerSelectorCard(
     name: String,
     total: Int,
     isSelected: Boolean,
+    isFourPlayer: Boolean = false,
+    isWatcher: Boolean = false,
     modifier: Modifier = Modifier,
     onClick: () -> Unit = {},
-    onLongClick: () -> Unit = {}
+    onLongClick: () -> Unit = {},
+    onToggleWatcher: () -> Unit = {}
 ) {
+    val watcherActive = isFourPlayer && isWatcher
+    val contentColor = if (watcherActive) Gray else Color.White
     Card(
         modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick),
         shape = RoundedCornerShape(8.dp),
@@ -335,32 +364,48 @@ fun PlayerSelectorCard(
                     else Gray.copy(alpha = 0.35f)
         ),
         colors = CardDefaults.cardColors(
-            containerColor = if (isSelected)
-                MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
-            else MaterialTheme.colorScheme.surface
+            containerColor = when {
+                watcherActive -> Color(0xFF131313)
+                isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.18f)
+                else -> MaterialTheme.colorScheme.surface
+            }
         )
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = name.uppercase(),
-                color = Color.White,
-                fontFamily = Exo2,
-                fontSize = 13.sp,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-            Text(
-                text = total.toString(),
-                color = Color.White,
-                fontWeight = FontWeight.Bold,
-                fontSize = 28.sp,
-                lineHeight = 32.sp
-            )
+        Box(modifier = Modifier.fillMaxWidth()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 6.dp, vertical = 8.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = name.uppercase(),
+                    color = contentColor,
+                    fontFamily = Exo2,
+                    fontSize = 13.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = total.toString(),
+                    color = contentColor,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 28.sp,
+                    lineHeight = 32.sp
+                )
+            }
+            if (isFourPlayer) {
+                Text(
+                    text = "⊘",
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .clickable(onClick = onToggleWatcher)
+                        .padding(6.dp),
+                    color = if (watcherActive) Gray else Gray.copy(alpha = 0.4f),
+                    fontSize = 18.sp,
+                    lineHeight = 20.sp
+                )
+            }
         }
     }
 }

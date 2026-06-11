@@ -8,6 +8,7 @@ import dev.patryk.score66.data.Language
 import dev.patryk.score66.data.Multiplier
 import dev.patryk.score66.data.NoOpStorage
 import dev.patryk.score66.data.PendingRound
+import dev.patryk.score66.data.Player
 import dev.patryk.score66.data.Round
 import dev.patryk.score66.data.StateStorage
 import dev.patryk.score66.data.formatSessionTimestamp
@@ -26,7 +27,15 @@ class GameViewModel(
 
     init {
         viewModelScope.launch {
-            storage.load()?.let { _state.value = it }
+            storage.load()?.let { loaded ->
+                // Pad to 4 players so 4P mode is always available after loading old saves
+                val players = if (loaded.players.size < 4) {
+                    loaded.players + (loaded.players.size until 4).map { i ->
+                        Player(i, "Player ${i + 1}")
+                    }
+                } else loaded.players
+                _state.value = loaded.copy(players = players)
+            }
         }
     }
 
@@ -35,8 +44,26 @@ class GameViewModel(
         viewModelScope.launch { storage.save(_state.value) }
     }
 
-    fun selectDeclarer(playerId: Int) = mutate {
-        it.copy(pending = PendingRound(declarerId = playerId))
+    fun selectDeclarer(playerId: Int) = mutate { s ->
+        val current = s.pending
+        val newWatcherId = if (current?.watcherId == playerId) null else current?.watcherId
+        s.copy(pending = PendingRound(declarerId = playerId, watcherId = newWatcherId))
+    }
+
+    fun setWatcher(id: Int) = mutate { s ->
+        val current = s.pending
+        val newWatcherId = if (current?.watcherId == id) null else id
+        val newDeclarerId = if (current?.declarerId == id) null else current?.declarerId
+        if (newWatcherId == null && newDeclarerId == null) {
+            s.copy(pending = null)
+        } else {
+            s.copy(pending = PendingRound(
+                declarerId = newDeclarerId,
+                watcherId = newWatcherId,
+                multiplier = current?.multiplier ?: Multiplier.NORMAL,
+                declarerWon = current?.declarerWon
+            ))
+        }
     }
 
     fun setMultiplier(multiplier: Multiplier) = mutate { s ->
@@ -52,15 +79,19 @@ class GameViewModel(
 
     fun finalizeHand(basePoints: Int) = mutate { s ->
         val pending = s.pending ?: return@mutate s
+        val declarerId = pending.declarerId ?: return@mutate s
         val declarerWon = pending.declarerWon ?: return@mutate s
         val round = Round(
             number = s.rounds.size + 1,
-            declarerId = pending.declarerId,
+            declarerId = declarerId,
             declarerWon = declarerWon,
             basePoints = basePoints,
-            multiplier = pending.multiplier
+            multiplier = pending.multiplier,
+            watcherId = pending.watcherId,
+            numPlayers = s.activePlayers.size
         )
-        s.copy(rounds = s.rounds + round, pending = null)
+        val nextPending = pending.watcherId?.let { PendingRound(watcherId = it) }
+        s.copy(rounds = s.rounds + round, pending = nextPending)
     }
 
     fun undo() = mutate { s ->
@@ -74,7 +105,7 @@ class GameViewModel(
                 GameSession(
                     id = ts, savedAt = ts,
                     name = formatSessionTimestamp(ts),
-                    players = s.players,
+                    players = s.activePlayers,
                     rounds = s.rounds
                 )
             ) + s.history
@@ -98,5 +129,16 @@ class GameViewModel(
 
     fun toggleLanguage() = mutate { s ->
         s.copy(language = if (s.language == Language.EN) Language.PL else Language.EN)
+    }
+
+    fun togglePlayerMode() = mutate { s ->
+        val newFourPlayer = !s.fourPlayer
+        // If switching to 3P, clear pending if it references player 3
+        val newPending = if (!newFourPlayer) {
+            s.pending?.let { p ->
+                if (p.declarerId == 3 || p.watcherId == 3) null else p
+            }
+        } else s.pending
+        s.copy(fourPlayer = newFourPlayer, pending = newPending)
     }
 }

@@ -218,7 +218,7 @@ class GameViewModelTest {
         vm.selectDeclarer(0); vm.setDeclarerWon(true); vm.finalizeHand(3)
 
         val roundsBefore = vm.state.value.rounds.toList()
-        val playersBefore = vm.state.value.players.toList()
+        val playersBefore = vm.state.value.activePlayers.toList()
         vm.newGame()
 
         val state = vm.state.value

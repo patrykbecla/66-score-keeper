@@ -12,7 +12,7 @@ val Gray = Color(0xFF888888)
 val Red = Color(0xFFE53935)
 
 val PlayerLineColors = listOf(
-    Color(0xFF7A9945), Color(0xFF499FBA), Color(0xFFD18238)
+    Color(0xFF7A9945), Color(0xFF499FBA), Color(0xFFD18238), Color(0xFFBF60C9)
 )
 
 fun playerColor(id: Int) = PlayerLineColors[id % PlayerLineColors.size]

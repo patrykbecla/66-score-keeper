@@ -1,12 +1,14 @@
 # 66 Score Keeper
 
-An Android score tracker for the card game 66 (Sechsundsechzig), built for 3 players.
+An Android score tracker for the card game 66 (Sechsundsechzig), supporting 3 or 4 players.
 
 ## Features
 
+- **3-player and 4-player modes** — toggle between 3P/4P (3G/4G in Polish) at any time
+- 4-player rotation: tap the ⊘ icon on a player card to mark who is sitting out; their score for that round is 0; watcher carries over between rounds automatically
 - Track scores across rounds with Double (Kontra) and Redouble (Rekontra) multipliers
 - Per-round history with score pills showing round number, declarer, and points awarded
-- Score-over-time line graph per player
+- Score-over-time line graph per player (4 lines in 4-player mode)
 - Game history — finished games are auto-archived; browse, rename, or delete past sessions
 - Editable player names (long-press to edit)
 - Undo last round
@@ -24,7 +26,7 @@ Each round has a declarer. Outcomes are described from the loser's perspective:
 | With half (33+) | 1 |
 
 - Declarer wins → declarer gains `points × multiplier`
-- Declarer loses → both opponents each gain `points × multiplier`
+- Declarer loses → each active opponent gains `points × multiplier` (sitting-out player scores 0)
 
 Multipliers: Normal ×1, Double ×2, Redouble ×4.
 

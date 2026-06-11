@@ -91,7 +91,7 @@ private fun PlayerTotalsRow(state: AppState) {
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        state.players.forEach { player ->
+        state.activePlayers.forEach { player ->
             val color = playerColor(player.id)
             val total = state.totalFor(player.id)
             Column(
@@ -133,8 +133,8 @@ private fun ScoreLineChart(
 
     val textMeasurer = rememberTextMeasurer()
 
-    val allSeries = remember(state.rounds, state.players) {
-        state.players.map { state.cumulativeSeriesFor(it.id) }
+    val allSeries = remember(state.rounds, state.activePlayers) {
+        state.activePlayers.map { state.cumulativeSeriesFor(it.id) }
     }
     val maxY = remember(allSeries) { max(1, allSeries.flatten().max()) }
 
@@ -190,7 +190,7 @@ private fun ScoreLineChart(
         }
 
         // Lines for each player
-        state.players.forEach { player ->
+        state.activePlayers.forEach { player ->
             val series = allSeries[player.id]
             val color = playerColor(player.id)
             val path = Path()
